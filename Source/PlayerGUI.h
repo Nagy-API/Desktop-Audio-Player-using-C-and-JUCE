@@ -1,4 +1,4 @@
-﻿#pragma once						// PlayerGUI.h
+#pragma once
 #include <JuceHeader.h>
 #include "PlayerAudio.h"
 
@@ -6,7 +6,7 @@
 using namespace juce;
 using namespace std;
 
-class MarkerListModel : public juce::ListBoxModel//new menna
+class MarkerListModel : public juce::ListBoxModel
 {
 public:
     std::vector<std::pair<int, double>>* markers = nullptr;
@@ -44,7 +44,7 @@ class PlayerGUI : public juce::Component,
     public juce::Button::Listener,
     public juce::Slider::Listener,
     public juce::ListBoxModel,
-    public juce::Timer//jana
+    public juce::Timer
 {
 public:
     PlayerGUI();
@@ -56,86 +56,82 @@ public:
     void getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill);
     void releaseResources();
     void paint(juce::Graphics& g) override;
-    int getNumRows() override;//nagy
-    void paintListBoxItem(int row, juce::Graphics& g, int width, int height, bool rowIsSelected) override;//nagy
-    void listBoxItemClicked(int row, const juce::MouseEvent& e) override;//nagy
-    void listBoxItemDoubleClicked(int row, const juce::MouseEvent& e) override;//nagy
-    void selectedRowsChanged(int lastRowSelected) override;//nagy
-    void timerCallback() override;//jana
-    void sliderDragStarted(juce::Slider* slider) override;//new menna
-    void sliderDragEnded(juce::Slider* slider) override;//new menna
-    MarkerListModel markerModel;//new menna
+    int getNumRows() override;
+    void paintListBoxItem(int row, juce::Graphics& g, int width, int height, bool rowIsSelected) override;
+    void listBoxItemClicked(int row, const juce::MouseEvent& e) override;
+    void listBoxItemDoubleClicked(int row, const juce::MouseEvent& e) override;
+    void selectedRowsChanged(int lastRowSelected) override;
+    void timerCallback() override;
+    void sliderDragStarted(juce::Slider* slider) override;
+    void sliderDragEnded(juce::Slider* slider) override;
+    MarkerListModel markerModel;
 
 
-    juce::AudioTransportSource& getAudioSource() { return playerAudio.getTransportSource(); }//jana
+    juce::AudioTransportSource& getAudioSource() { return playerAudio.getTransportSource(); }
 
 
 private:
     PlayerAudio playerAudio;
 
-    // GUI elements
-    juce::TextButton playPauseButton{ "Play/Pause" };//nagy
+    juce::TextButton playPauseButton{ "Play/Pause" };
     juce::TextButton startButton{ "Start" };
     juce::TextButton endButton{ "End" };
     juce::TextButton loadButton{ "Load File" };
-    juce::TextButton restartButton{ "Restart" };//nagy
-    juce::TextButton stopButton{ "Stop" };//nagy
-    juce::Label titleLabel{ {}, "Name: -" };//nagy
-    juce::Label durationLabel{ {}, "Time: 00:00" };//nagy
+    juce::TextButton restartButton{ "Restart" };
+    juce::TextButton stopButton{ "Stop" };
+    juce::Label titleLabel{ {}, "Name: -" };
+    juce::Label durationLabel{ {}, "Time: 00:00" };
     juce::Slider volumeSlider;
     juce::TextButton muteButton{ "Mute" };
     juce::TextButton loopButton{ "Loop" };
-    juce::TextButton setAButton{ "Set A" };//new menna
-    juce::TextButton setBButton{ "Set B" };//new menna
-    juce::TextButton abLoopButton{ "A-B Loop" };//new menna
-    bool isLooping = false; //menna
-    std::vector<juce::File> playlist;//nagy
-    double pointA = 0.0;//new menna
-    double pointB = 0.0;//new menna
-    bool abLoopEnabled = false;//new menna
+    juce::TextButton setAButton{ "Set A" };
+    juce::TextButton setBButton{ "Set B" };
+    juce::TextButton abLoopButton{ "A-B Loop" };
+    bool isLooping = false;
+    std::vector<juce::File> playlist;
+    double pointA = 0.0;
+    double pointB = 0.0;
+    bool abLoopEnabled = false;
 
-    juce::ListBox playlistBox{ "List", this };//nagy
-    juce::TextButton forwardButton{ " +10s" };//nagy
-    juce::TextButton backwardButton{ " -10s" };//nagy
-    juce::TextButton shuffleButton{ "Shuffle: OFF" }; //new menna
+    juce::ListBox playlistBox{ "List", this };
+    juce::TextButton forwardButton{ " +10s" };
+    juce::TextButton backwardButton{ " -10s" };
+    juce::TextButton shuffleButton{ "Shuffle: OFF" };
     bool isShuffle = false;
 
-    juce::Slider positionSlider;//jana
-    juce::Label positionLabel{ {}, "00:00 / 00:00" };//jana
+    juce::Slider positionSlider;
+    juce::Label positionLabel{ {}, "00:00 / 00:00" };
 
-    juce::TextButton addMarkerButton{ "Add Marker" };//new menna
-    juce::ListBox markerListBox{ "Markers", this };//new menna
-    std::vector<std::pair<int, double>> markers; // new menna
-    juce::TextButton deleteMarkerButton{ "Delete Marker" };// new menna
+    juce::TextButton addMarkerButton{ "Add Marker" };
+    juce::ListBox markerListBox{ "Markers", this };
+    std::vector<std::pair<int, double>> markers;
+    juce::TextButton deleteMarkerButton{ "Delete Marker" };
 
-    juce::Slider speedSlider;//jana
-    juce::Label speedLabel{ {}, "Speed: 1.0x" };//jana
+    juce::Slider speedSlider;
+    juce::Label speedLabel{ {}, "Speed: 1.0x" };
 
 
-    juce::AudioFormatManager thumbnailFormatManager;//new menna
-    juce::AudioThumbnailCache thumbnailCache{ 5 }; //new menna
-    juce::AudioThumbnail thumbnail{ 512, thumbnailFormatManager, thumbnailCache };//new menna
-    bool thumbnailLoaded = false;//new menna
+    juce::AudioFormatManager thumbnailFormatManager;
+    juce::AudioThumbnailCache thumbnailCache{ 5 };
+    juce::AudioThumbnail thumbnail{ 512, thumbnailFormatManager, thumbnailCache };
+    bool thumbnailLoaded = false;
 
 
     std::unique_ptr<juce::FileChooser> fileChooser;
 
-    // Event handlers
     void buttonClicked(juce::Button* button) override;
     void sliderValueChanged(juce::Slider* slider) override;
 
-    void saveSession();//jana
-    void loadSession();//jana
+    void saveSession();
+    void loadSession();
 
 
-    bool isPlaying = false;//nagy
+    bool isPlaying = false;
 
     bool isMuted = false;
-    float previousGain = 0.5f;//jana
-    juce::Rectangle<int> thumbnailArea; 
+    float previousGain = 0.5f;
+    juce::Rectangle<int> thumbnailArea;
 
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PlayerGUI)
 };
-
-//PlayerGUI.h
