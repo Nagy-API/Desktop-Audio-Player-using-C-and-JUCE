@@ -1,4 +1,4 @@
-﻿#include <JuceHeader.h>
+#include <JuceHeader.h>
 #include "PlayerGUI.h"
 
 
@@ -473,7 +473,7 @@ void RestoreSessionOverlay::paint(juce::Graphics& g)
     text.removeFromTop(6);
     g.setColour(juce::Colours::white.withAlpha(0.82f));
     g.setFont(juce::Font(juce::FontOptions(13.6f)));
-    g.drawFittedText("Restore the saved playlist for " + pulseTitle + " or start with a clean empty playlist.",
+    g.drawFittedText(juce::String("Restore the saved playlist for ") + pulseTitle + " or start with a clean empty playlist.",
         text.removeFromTop(44), juce::Justification::centred, 2, 0.90f);
 
     auto buttonPlate = card.reduced(20.0f).withTrimmedTop(176.0f).withHeight(48.0f);
@@ -662,7 +662,7 @@ PlayerGUI::PlayerGUI()
 
     auto buttons = { &playlistToggleButton, &lyricsToggleButton, &markerToggleButton, &trackInfoToggleButton,
                      &loadButton, &loadQueueButton, &saveQueueButton, &removeTrackButton, &clearQueueButton, &moveUpButton, &moveDownButton,
-                     &autoLyricsButton, &loadLyricsButton, &clearLyricsButton,
+                     &autoLyricsButton, &loadLyricsButton, &clearLyricsButton, &resetLyricsOffsetButton,
                      &playPauseButton, &stopButton, &restartButton, &previousTrackButton, &nextTrackButton,
                      &startButton, &endButton, &backwardButton, &forwardButton,
                      &muteButton, &loopButton, &shuffleButton, &repeatOneButton,
@@ -749,6 +749,7 @@ PlayerGUI::PlayerGUI()
     styleButton(autoLyricsButton, juce::Colour::fromRGB(24, 54, 72), juce::Colour::fromRGB(82, 210, 236));
     styleButton(loadLyricsButton, juce::Colour::fromRGB(36, 30, 76), juce::Colour::fromRGB(134, 104, 236));
     styleButton(clearLyricsButton, juce::Colour::fromRGB(82, 34, 70), juce::Colour::fromRGB(230, 72, 130));
+    styleButton(resetLyricsOffsetButton, juce::Colour::fromRGB(24, 36, 72), juce::Colour::fromRGB(38, 231, 255));
 
     loadQueueButton.setTooltip("Import a saved playlist file (.svpl/.m3u/.txt)");
     saveQueueButton.setTooltip("Export the current playlist to a file so you can reuse it later");
@@ -759,6 +760,7 @@ PlayerGUI::PlayerGUI()
     autoLyricsButton.setTooltip("Automatically load matching lyrics when available");
     loadLyricsButton.setTooltip("Load lyrics file manually");
     clearLyricsButton.setTooltip("Clear loaded lyrics");
+    resetLyricsOffsetButton.setTooltip("Reset lyrics timing offset to 0 ms");
     setAButton.setTooltip("Set A point for A-B loop");
     setBButton.setTooltip("Set B point for A-B loop");
     abLoopButton.setTooltip("Toggle A-B loop");
@@ -790,7 +792,21 @@ PlayerGUI::PlayerGUI()
     speedSlider.onValueChange = [this] { applyTempoFromSlider(); };
     addAndMakeVisible(speedSlider);
 
-    for (auto* slider : { &volumeSlider, &positionSlider, &speedSlider })
+    lyricsOffsetLabel.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
+    lyricsOffsetLabel.setColour(juce::Label::textColourId, juce::Colour::fromRGB(95, 220, 230));
+    lyricsOffsetLabel.setMinimumHorizontalScale(0.72f);
+    lyricsOffsetLabel.setTooltip("Fine-tune synced lyrics timing. Negative values show lyrics earlier; positive values delay them.");
+    addAndMakeVisible(lyricsOffsetLabel);
+
+    lyricsOffsetSlider.setRange(-5000.0, 5000.0, 100.0);
+    lyricsOffsetSlider.setValue(0.0, juce::dontSendNotification);
+    lyricsOffsetSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    lyricsOffsetSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    lyricsOffsetSlider.setTooltip("Lyrics timing offset: -5000 ms to +5000 ms");
+    lyricsOffsetSlider.addListener(this);
+    addAndMakeVisible(lyricsOffsetSlider);
+
+    for (auto* slider : { &volumeSlider, &positionSlider, &speedSlider, &lyricsOffsetSlider })
     {
         slider->setColour(juce::Slider::thumbColourId, juce::Colour::fromRGB(31, 229, 255));
         slider->setColour(juce::Slider::trackColourId, juce::Colour::fromRGB(255, 49, 206));
@@ -866,6 +882,7 @@ PlayerGUI::PlayerGUI()
     refreshButtonVisibility();
     updateQueueStatusLabel();
     updateLyricsStatusLabel();
+    updateLyricsOffsetLabel();
     startTimer(50);
 }
 
@@ -894,20 +911,8 @@ void PlayerGUI::setPulseTitle(const juce::String& newTitle)
 
 void PlayerGUI::promptToRestoreSessionIfAvailable()
 {
-    // The startup intro can temporarily sit above the player. If the restore
-    // prompt was already prepared behind it, calling this again should simply
-    // bring the existing prompt back to the front instead of ignoring it.
     if (sessionLoaded)
-    {
-        if (restorePromptVisible)
-        {
-            updateRestorePromptVisibility();
-            resized();
-            repaint();
-        }
-
         return;
-    }
 
     sessionLoaded = true;
 
@@ -1027,6 +1032,9 @@ void PlayerGUI::refreshButtonVisibility()
     autoLyricsButton.setVisible(!compactMode);
     loadLyricsButton.setVisible(!compactMode);
     clearLyricsButton.setVisible(!compactMode);
+    lyricsOffsetLabel.setVisible(!compactMode);
+    lyricsOffsetSlider.setVisible(!compactMode);
+    resetLyricsOffsetButton.setVisible(!compactMode);
 
     // These details now live in the sidebar tabs, especially Track Info.
     // Keeping this top row quiet makes the deck feel cleaner.
@@ -1054,8 +1062,8 @@ void PlayerGUI::resized()
     outer.removeFromTop(headerH);
     outer.removeFromTop(compactMode ? 8 : 12);
 
-    const int buttonH = compactMode ? 28 : 34;
     const int labelH = 24;
+    const int buttonH = compactMode ? 30 : 36;
 
     auto sideArea = juce::Rectangle<int>();
     const bool showSide = outer.getWidth() >= 1120;
@@ -1254,6 +1262,17 @@ void PlayerGUI::resized()
         loadLyricsButton.setBounds(lyricTools.removeFromLeft(116).withHeight(buttonH));
         lyricTools.removeFromLeft(12);
         clearLyricsButton.setBounds(lyricTools.removeFromLeft(116).withHeight(buttonH));
+
+        lyricInner.removeFromTop(juce::jlimit(4, 8, lyricInner.getHeight() / 4));
+        auto offsetRow = lyricInner.removeFromTop(juce::jlimit(22, 28, lyricInner.getHeight()));
+        lyricsOffsetLabel.setBounds(offsetRow.removeFromLeft(96).withTrimmedTop(2));
+        offsetRow.removeFromLeft(8);
+
+        auto resetOffsetArea = offsetRow.removeFromRight(66);
+        resetLyricsOffsetButton.setBounds(resetOffsetArea.withSizeKeepingCentre(62, 22).translated(0, -6));
+
+        offsetRow.removeFromRight(8);
+        lyricsOffsetSlider.setBounds(offsetRow.reduced(0, 4));
     }
 
     if (showSide)
@@ -1403,6 +1422,9 @@ void PlayerGUI::resized()
         playlistBox.setVisible(false);
         markerListBox.setVisible(false);
         lyricsListBox.setVisible(false);
+        lyricsOffsetLabel.setVisible(false);
+        lyricsOffsetSlider.setVisible(false);
+        resetLyricsOffsetButton.setVisible(false);
         loadQueueButton.setVisible(false);
         saveQueueButton.setVisible(false);
         removeTrackButton.setVisible(false);
@@ -1611,7 +1633,7 @@ void PlayerGUI::paint(juce::Graphics& g)
             g.drawText(text, labelArea, juce::Justification::centredLeft);
         };
 
-    drawSmallLabel("Volume  " + juce::String(juce::roundToInt(volumeSlider.getValue() * 100.0)) + "%",
+    drawSmallLabel(juce::String("Volume  ") + juce::String(juce::roundToInt(volumeSlider.getValue() * 100.0)) + "%",
         volumeSlider.getBounds().withHeight(18).translated(0, -18));
 
     auto drawModeLabel = [&](const juce::Button& button, const juce::String& text)
@@ -1987,6 +2009,13 @@ void PlayerGUI::buttonClicked(juce::Button* button)
         return;
     }
 
+    if (button == &resetLyricsOffsetButton)
+    {
+        setLyricsOffsetMilliseconds(0);
+        saveSession();
+        return;
+    }
+
     if (button == &previousTrackButton)
     {
         loadRelativeTrack(-1, isPlaying);
@@ -2126,7 +2155,7 @@ void PlayerGUI::buttonClicked(juce::Button* button)
         if (pointB > pointA)
             playerAudio.setLoopPoints(pointA, pointB);
 
-        setAButton.setButtonText("A: " + formatTime(pointA));
+        setAButton.setButtonText(juce::String("A: ") + formatTime(pointA));
         return;
     }
 
@@ -2147,7 +2176,7 @@ void PlayerGUI::buttonClicked(juce::Button* button)
         }
 
         playerAudio.setLoopPoints(pointA, pointB);
-        setBButton.setButtonText("B: " + formatTime(pointB));
+        setBButton.setButtonText(juce::String("B: ") + formatTime(pointB));
         return;
     }
 
@@ -2254,6 +2283,12 @@ void PlayerGUI::sliderValueChanged(juce::Slider* slider)
         applyTempoFromSlider();
         return;
     }
+
+    if (slider == &lyricsOffsetSlider)
+    {
+        setLyricsOffsetMilliseconds(juce::roundToInt(lyricsOffsetSlider.getValue()));
+        return;
+    }
 }
 
 
@@ -2338,7 +2373,7 @@ void PlayerGUI::applyTempoFromSlider()
 
     if (std::abs(newRatio - speedRatio) < 0.0001)
     {
-        speedLabel.setText("Tempo: " + juce::String(speedRatio, 2) + "x", juce::dontSendNotification);
+        speedLabel.setText(juce::String("Tempo: ") + juce::String(speedRatio, 2) + "x", juce::dontSendNotification);
         return;
     }
 
@@ -2349,7 +2384,7 @@ void PlayerGUI::applyTempoFromSlider()
     speedRatio = newRatio;
     playerAudio.setSpeed(speedRatio);
 
-    speedLabel.setText("Tempo: " + juce::String(speedRatio, 2) + "x", juce::dontSendNotification);
+    speedLabel.setText(juce::String("Tempo: ") + juce::String(speedRatio, 2) + "x", juce::dontSendNotification);
     updateCurrentLyric();
 }
 
@@ -2650,9 +2685,9 @@ void PlayerGUI::showUnsupportedAudioFormatMessage(const juce::StringArray& fileN
     juce::String message;
 
     if (fileNames.size() == 1)
-        message = "This audio format is not supported yet:\n" + fileNames[0];
+        message = juce::String("This audio format is not supported yet:\n") + fileNames[0];
     else
-        message = "These audio formats are not supported yet:\n" + fileNames.joinIntoString("\n");
+        message = juce::String("These audio formats are not supported yet:\n") + fileNames.joinIntoString("\n");
 
     message += "\n\nSonicVibe currently supports: MP3, WAV, FLAC, OGG, AIFF/AIF.";
     message += "\nM4A/AAC/MP4 audio will need an FFmpeg-based decoder or converter later.";
@@ -2723,8 +2758,8 @@ void PlayerGUI::loadTrackAt(int row, bool shouldStartPlayback)
     thumbnailLoaded = true;
     loadAlbumArtForTrack(file);
 
-    titleLabel.setText("Name: " + file.getFileNameWithoutExtension(), juce::dontSendNotification);
-    durationLabel.setText("Length: " + playerAudio.getFormattedLength(), juce::dontSendNotification);
+    titleLabel.setText(juce::String("Name: ") + file.getFileNameWithoutExtension(), juce::dontSendNotification);
+    durationLabel.setText(juce::String("Length: ") + playerAudio.getFormattedLength(), juce::dontSendNotification);
     currentAudioFile = file;
     playbackAnchorPosition = 0.0;
     playbackAnchorTimeMs = juce::Time::getMillisecondCounterHiRes();
@@ -2797,8 +2832,8 @@ void PlayerGUI::updateQueueStatusLabel()
     }
 
     const int current = selected >= 0 ? selected + 1 : 0;
-    queueStatusLabel.setText("Playlist: " + juce::String(total) + " tracks" +
-        (current > 0 ? "  •  Selected " + juce::String(current) + "/" + juce::String(total) : juce::String()),
+    queueStatusLabel.setText(juce::String("Playlist: ") + juce::String(total) + " tracks" +
+        (current > 0 ? juce::String("  •  Selected ") + juce::String(current) + "/" + juce::String(total) : juce::String()),
         juce::dontSendNotification);
 }
 
@@ -2814,19 +2849,47 @@ void PlayerGUI::updateLyricsStatusLabel()
 
             if (!matchingLyrics.existsAsFile())
             {
-                lyricsStatusLabel.setText("Lyrics: " + autoState + " • no matching .lrc found", juce::dontSendNotification);
+                lyricsStatusLabel.setText(juce::String("Lyrics: ") + autoState + " • no matching .lrc found", juce::dontSendNotification);
                 return;
             }
         }
 
-        lyricsStatusLabel.setText("Lyrics: " + autoState + " • none", juce::dontSendNotification);
+        lyricsStatusLabel.setText(juce::String("Lyrics: ") + autoState + " • none", juce::dontSendNotification);
         return;
     }
 
     const auto fileName = currentLyricsFile.existsAsFile() ? currentLyricsFile.getFileName() : juce::String("loaded");
+    const int offsetMs = juce::roundToInt(lyricsOffsetSeconds * 1000.0);
+    const juce::String offsetText = offsetMs == 0
+        ? juce::String()
+        : juce::String("  •  Offset ")
+        + (offsetMs > 0 ? juce::String("+") : juce::String())
+        + juce::String(offsetMs)
+        + juce::String(" ms");
 
-    lyricsStatusLabel.setText("Lyrics: " + autoState + " • " + juce::String(lyrics.size()) + " lines  •  " + fileName,
+    lyricsStatusLabel.setText(juce::String("Lyrics: ") + autoState + " • " + juce::String(lyrics.size()) + " lines  •  " + fileName + offsetText,
         juce::dontSendNotification);
+}
+
+void PlayerGUI::updateLyricsOffsetLabel()
+{
+    const int offsetMs = juce::roundToInt(lyricsOffsetSeconds * 1000.0);
+    const juce::String sign = offsetMs > 0 ? "+" : "";
+    lyricsOffsetLabel.setText(juce::String("Offset: ") + sign + juce::String(offsetMs) + " ms", juce::dontSendNotification);
+}
+
+void PlayerGUI::setLyricsOffsetMilliseconds(int offsetMs)
+{
+    const int clampedMs = juce::jlimit(-5000, 5000, offsetMs);
+    lyricsOffsetSeconds = static_cast<double>(clampedMs) / 1000.0;
+
+    if (std::abs(lyricsOffsetSlider.getValue() - static_cast<double>(clampedMs)) > 0.5)
+        lyricsOffsetSlider.setValue(static_cast<double>(clampedMs), juce::dontSendNotification);
+
+    updateLyricsOffsetLabel();
+    updateLyricsStatusLabel();
+    updateCurrentLyric();
+    repaint();
 }
 
 void PlayerGUI::setCurrentLyricIndex(int newIndex)
@@ -2926,7 +2989,9 @@ void PlayerGUI::seekToLyricLine(int row)
         return;
 
     const double length = playerAudio.getLength();
-    const double targetPosition = juce::jlimit(0.0, length > 0.0 ? length : line.timeSeconds, line.timeSeconds);
+    const double rawTargetPosition = line.timeSeconds + lyricsOffsetSeconds;
+    const double maxTargetPosition = length > 0.0 ? length : juce::jmax(0.0, rawTargetPosition);
+    const double targetPosition = juce::jlimit(0.0, maxTargetPosition, rawTargetPosition);
 
     setSyncedPlaybackPosition(targetPosition);
 
@@ -2947,7 +3012,7 @@ void PlayerGUI::updateCurrentLyric()
         return;
     }
 
-    const double effectiveTime = juce::jmax(0.0, getEffectivePlaybackPosition());
+    const double effectiveTime = juce::jmax(0.0, getEffectivePlaybackPosition() - lyricsOffsetSeconds);
     int newIndex = -1;
 
     for (int i = 0; i < static_cast<int>(lyrics.size()); ++i)
@@ -3425,7 +3490,7 @@ juce::File PlayerGUI::getSessionFile() const
         safeName = "pulse";
 
     return juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile("sonicvibe_" + safeName + "_session.txt");
+        .getChildFile(juce::String("sonicvibe_") + safeName + "_session.txt");
 }
 
 bool PlayerGUI::hasRestorableSession() const
@@ -3471,6 +3536,7 @@ void PlayerGUI::saveSession()
         data << "repeatOne=" << (repeatMode == RepeatMode::One ? "1" : "0") << "\n"; // backward compatibility
         data << "shuffle=" << (isShuffle ? "1" : "0") << "\n";
         data << "autoLyrics=" << (autoLyricsEnabled ? "1" : "0") << "\n";
+        data << "lyricsOffsetMs=" << juce::roundToInt(lyricsOffsetSeconds * 1000.0) << "\n";
 
         if (currentLyricsFile.existsAsFile())
             data << "lyricsFile=" << currentLyricsFile.getFullPathName() << "\n";
@@ -3500,6 +3566,7 @@ void PlayerGUI::loadSession()
     RepeatMode lastRepeatMode = RepeatMode::Off;
     bool lastShuffle = false;
     bool lastAutoLyrics = true;
+    int lastLyricsOffsetMs = 0;
     juce::String lyricsFilePath;
 
     for (const auto& rawLine : lines)
@@ -3553,6 +3620,10 @@ void PlayerGUI::loadSession()
         {
             lastAutoLyrics = line.fromFirstOccurrenceOf("=", false, false) != "0";
         }
+        else if (line.startsWith("lyricsOffsetMs="))
+        {
+            lastLyricsOffsetMs = line.fromFirstOccurrenceOf("=", false, false).getIntValue();
+        }
         else if (line.startsWith("lyricsFile="))
         {
             lyricsFilePath = line.fromFirstOccurrenceOf("=", false, false);
@@ -3575,6 +3646,7 @@ void PlayerGUI::loadSession()
     updateQueueStatusLabel();
     autoLyricsEnabled = lastAutoLyrics;
     autoLyricsButton.setButtonText(autoLyricsEnabled ? "Auto Lyrics On" : "Auto Lyrics Off");
+    setLyricsOffsetMilliseconds(lastLyricsOffsetMs);
 
     selectedRow = juce::jlimit(0, static_cast<int>(playlist.size()) - 1, selectedRow);
     loadTrackAt(selectedRow, false);
